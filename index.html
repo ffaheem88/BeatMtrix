@@ -251,6 +251,46 @@
                 </div>
             </div>
         </div>
+        
+        <!-- EQ Panel -->
+        <div id="eq-panel" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-gray-800 rounded-xl p-6 max-w-md w-full">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold">
+                        <span id="eq-instrument-name"></span> EQ
+                    </h3>
+                    <button id="close-eq" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+                </div>
+                
+                <div class="space-y-4">
+                    <!-- Low EQ -->
+                    <div class="flex items-center space-x-4">
+                        <label class="w-16 text-sm font-medium">Low</label>
+                        <input type="range" id="eq-low" min="-20" max="20" value="0" step="1" class="flex-1">
+                        <span id="eq-low-value" class="w-12 text-sm text-right">0 dB</span>
+                    </div>
+                    
+                    <!-- Mid EQ -->
+                    <div class="flex items-center space-x-4">
+                        <label class="w-16 text-sm font-medium">Mid</label>
+                        <input type="range" id="eq-mid" min="-20" max="20" value="0" step="1" class="flex-1">
+                        <span id="eq-mid-value" class="w-12 text-sm text-right">0 dB</span>
+                    </div>
+                    
+                    <!-- High EQ -->
+                    <div class="flex items-center space-x-4">
+                        <label class="w-16 text-sm font-medium">High</label>
+                        <input type="range" id="eq-high" min="-20" max="20" value="0" step="1" class="flex-1">
+                        <span id="eq-high-value" class="w-12 text-sm text-right">0 dB</span>
+                    </div>
+                    
+                    <!-- Reset button -->
+                    <button id="reset-eq" class="w-full py-2 bg-gray-600 hover:bg-gray-500 rounded-lg font-medium mt-4">
+                        Reset EQ
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <!-- Info Panel -->
         <div id="info" class="hidden mt-4 sm:mt-6 bg-gray-800 rounded-xl p-3 sm:p-4 shadow-xl">
@@ -303,6 +343,12 @@
         let templates = {};
         let nextTemplateNumber = 1;
         let templateLoops = {};
+        
+        // Mute/Solo states and EQ
+        let muteStates = {};
+        let soloStates = {};
+        let instrumentEQs = {};
+        let instrumentChannels = {};
         
         // Lead melodies and patterns
         const leadPatterns = {
@@ -366,13 +412,43 @@
 
         // Initialize synths
         function createSynths() {
-            // Clean up old synths
+            // Clean up old synths and effects
             Object.values(synths).forEach(synth => {
                 try { synth.dispose(); } catch (e) {}
+            });
+            Object.values(instrumentEQs).forEach(eq => {
+                try { eq.dispose(); } catch (e) {}
+            });
+            Object.values(instrumentChannels).forEach(channel => {
+                try { channel.dispose(); } catch (e) {}
             });
 
             // Create volume control
             volume = new Tone.Volume(-6).toDestination();
+
+            // Create instruments with individual channels and EQ
+            allInstruments.forEach(inst => {
+                // Create 3-band EQ for each instrument
+                instrumentEQs[inst.name] = new Tone.EQ3({
+                    low: 0,
+                    mid: 0,
+                    high: 0,
+                    lowFrequency: 320,
+                    highFrequency: 3200
+                });
+                
+                // Create channel with volume control
+                instrumentChannels[inst.name] = new Tone.Channel({
+                    volume: 0,
+                    pan: 0,
+                    mute: false,
+                    solo: false
+                }).chain(instrumentEQs[inst.name], volume);
+                
+                // Initialize mute/solo states
+                muteStates[inst.name] = false;
+                soloStates[inst.name] = false;
+            });
 
             synths = {
                 'Kick': new Tone.MembraneSynth({
@@ -380,12 +456,12 @@
                     octaves: 10,
                     oscillator: { type: 'sine' },
                     envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4 }
-                }).connect(volume),
+                }).connect(instrumentChannels['Kick']),
 
                 'Snare': new Tone.NoiseSynth({
                     noise: { type: 'white' },
                     envelope: { attack: 0.001, decay: 0.2, sustain: 0, release: 0.2 }
-                }).connect(volume),
+                }).connect(instrumentChannels['Snare']),
 
                 'Hihat': new Tone.MetalSynth({
                     frequency: 250,
@@ -394,7 +470,7 @@
                     modulationIndex: 32,
                     resonance: 4000,
                     octaves: 1.5
-                }).connect(volume),
+                }).connect(instrumentChannels['Hihat']),
 
                 'Open Hat': new Tone.MetalSynth({
                     frequency: 250,
@@ -403,43 +479,43 @@
                     modulationIndex: 32,
                     resonance: 4000,
                     octaves: 1.5
-                }).connect(volume),
+                }).connect(instrumentChannels['Open Hat']),
 
                 'Bass': new Tone.MonoSynth({
                     oscillator: { type: 'sawtooth' },
                     envelope: { attack: 0.01, decay: 0.3, sustain: 0.4, release: 0.8 },
                     filter: { Q: 2, type: 'lowpass', rolloff: -24 },
                     filterEnvelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0.8, baseFrequency: 200, octaves: 2.5 }
-                }).connect(volume),
+                }).connect(instrumentChannels['Bass']),
 
                 'Sub Bass': new Tone.MonoSynth({
                     oscillator: { type: 'sine' },
                     envelope: { attack: 0.02, decay: 0.5, sustain: 0.5, release: 1 },
                     filter: { Q: 1, type: 'lowpass', rolloff: -12 },
                     filterEnvelope: { attack: 0.02, decay: 0.2, sustain: 0.8, release: 1, baseFrequency: 100, octaves: 1 }
-                }).connect(volume),
+                }).connect(instrumentChannels['Sub Bass']),
 
                 'Lead': new Tone.PolySynth(Tone.Synth, {
                     oscillator: { type: 'square' },
                     envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 0.8 }
-                }).connect(volume),
+                }).connect(instrumentChannels['Lead']),
 
                 'Pad': new Tone.PolySynth(Tone.Synth, {
                     oscillator: { type: 'triangle' },
                     envelope: { attack: 0.5, decay: 0.5, sustain: 0.8, release: 2 }
-                }).connect(volume),
+                }).connect(instrumentChannels['Pad']),
 
                 'FX 1': new Tone.PluckSynth({
                     attackNoise: 3,
                     dampening: 4000,
                     resonance: 0.9
-                }).connect(volume),
+                }).connect(instrumentChannels['FX 1']),
 
                 'FX 2': new Tone.FMSynth({
                     harmonicity: 8,
                     modulationIndex: 10,
                     envelope: { attack: 0.001, decay: 0.2, sustain: 0, release: 0.2 }
-                }).connect(volume)
+                }).connect(instrumentChannels['FX 2'])
             };
         }
 
@@ -451,7 +527,8 @@
             // Create header row with step numbers
             const headerRow = document.createElement('div');
             headerRow.className = 'flex items-center mb-1 sm:mb-2';
-            headerRow.innerHTML = '<div class="w-12 sm:w-24 md:w-32"></div>';
+            // Adjust width to match controls container
+            headerRow.innerHTML = '<div class="w-32 sm:w-48 md:w-56"></div>';
             
             const stepsHeader = document.createElement('div');
             stepsHeader.className = 'flex gap-0.5 sm:gap-1';
@@ -473,10 +550,11 @@
                 const row = document.createElement('div');
                 row.className = 'instrument-row flex items-center py-1 sm:py-2';
 
-                // Instrument label
-                const label = document.createElement('div');
-                label.className = 'w-12 sm:w-24 md:w-32 flex items-center justify-center sm:justify-start space-x-1 sm:space-x-2 pr-1 sm:pr-4';
+                // Instrument controls container
+                const controlsContainer = document.createElement('div');
+                controlsContainer.className = 'flex items-center space-x-1 sm:space-x-2 pr-1 sm:pr-2';
                 
+                // Instrument icon and name
                 const iconButton = document.createElement('button');
                 iconButton.className = 'instrument-icon text-base sm:text-xl md:text-2xl hover:scale-110 transition-transform cursor-pointer focus:outline-none p-1';
                 iconButton.innerHTML = inst.icon;
@@ -487,9 +565,33 @@
                 nameSpan.className = 'font-medium text-xs sm:text-sm hidden sm:inline';
                 nameSpan.textContent = inst.name;
                 
-                label.appendChild(iconButton);
-                label.appendChild(nameSpan);
-                row.appendChild(label);
+                // Mute button
+                const muteBtn = document.createElement('button');
+                muteBtn.className = 'mute-btn w-6 h-6 sm:w-8 sm:h-8 rounded text-xs sm:text-sm font-bold bg-gray-600 hover:bg-gray-500 text-white';
+                muteBtn.textContent = 'M';
+                muteBtn.title = 'Mute';
+                muteBtn.dataset.instrument = inst.name;
+                
+                // Solo button
+                const soloBtn = document.createElement('button');
+                soloBtn.className = 'solo-btn w-6 h-6 sm:w-8 sm:h-8 rounded text-xs sm:text-sm font-bold bg-gray-600 hover:bg-gray-500 text-white';
+                soloBtn.textContent = 'S';
+                soloBtn.title = 'Solo';
+                soloBtn.dataset.instrument = inst.name;
+                
+                // EQ button
+                const eqBtn = document.createElement('button');
+                eqBtn.className = 'eq-btn w-6 h-6 sm:w-8 sm:h-8 rounded text-xs sm:text-sm font-bold bg-gray-600 hover:bg-gray-500 text-white hidden sm:block';
+                eqBtn.textContent = 'EQ';
+                eqBtn.title = 'Equalizer';
+                eqBtn.dataset.instrument = inst.name;
+                
+                controlsContainer.appendChild(iconButton);
+                controlsContainer.appendChild(nameSpan);
+                controlsContainer.appendChild(muteBtn);
+                controlsContainer.appendChild(soloBtn);
+                controlsContainer.appendChild(eqBtn);
+                row.appendChild(controlsContainer);
 
                 // Steps grid
                 const stepsContainer = document.createElement('div');
@@ -515,6 +617,26 @@
                 row.appendChild(stepsContainer);
                 gridContainer.appendChild(row);
                 gridState.push(instrumentGridRow);
+            });
+        }
+
+        // Check if any solo is active
+        function isAnySoloActive() {
+            return Object.values(soloStates).some(state => state);
+        }
+        
+        // Update channel mute states based on solo/mute
+        function updateChannelStates() {
+            const anySolo = isAnySoloActive();
+            
+            allInstruments.forEach(inst => {
+                if (anySolo) {
+                    // If any solo is active, mute all non-solo channels
+                    instrumentChannels[inst.name].mute = !soloStates[inst.name];
+                } else {
+                    // Otherwise, use individual mute states
+                    instrumentChannels[inst.name].mute = muteStates[inst.name];
+                }
             });
         }
 
@@ -812,32 +934,55 @@
 
         // Event Listeners
         startButton.addEventListener('click', async () => {
-            await Tone.start();
-            console.log('Audio context started');
-            startScreen.classList.add('hidden');
-            mainControls.classList.remove('hidden');
-            presets.classList.remove('hidden');
-            sequencer.classList.remove('hidden');
-            info.classList.remove('hidden');
-            templateStatus.classList.remove('hidden');
-            createSynths();
-            createGrid();
-            createTemplateSlots();
-            
-            // Set up transport
-            Tone.Transport.cancel(); // Clear any existing events
-            Tone.Transport.bpm.value = 120;
-            Tone.Transport.loop = true;
-            Tone.Transport.loopEnd = '1m'; // 1 measure loop
-            
-            // Schedule the sequence
-            const loopEvent = Tone.Transport.scheduleRepeat(sequenceLoop, '16n');
-            console.log('Sequencer initialized');
+            try {
+                // iOS requires user interaction to start audio
+                await Tone.start();
+                console.log('Audio context started, state:', Tone.context.state);
+                
+                // For iOS, we need to create a silent buffer to "wake up" the audio
+                const buffer = Tone.context.createBuffer(1, 1, Tone.context.sampleRate);
+                const source = Tone.context.createBufferSource();
+                source.buffer = buffer;
+                source.connect(Tone.context.destination);
+                source.start(0);
+                
+                // Additional iOS audio fix
+                if (Tone.context.state !== 'running') {
+                    await Tone.context.resume();
+                }
+                
+                startScreen.classList.add('hidden');
+                mainControls.classList.remove('hidden');
+                presets.classList.remove('hidden');
+                sequencer.classList.remove('hidden');
+                info.classList.remove('hidden');
+                templateStatus.classList.remove('hidden');
+                createSynths();
+                createGrid();
+                createTemplateSlots();
+                
+                // Set up transport
+                Tone.Transport.cancel(); // Clear any existing events
+                Tone.Transport.bpm.value = 120;
+                Tone.Transport.loop = true;
+                Tone.Transport.loopEnd = '1m'; // 1 measure loop
+                
+                // Schedule the sequence
+                const loopEvent = Tone.Transport.scheduleRepeat(sequenceLoop, '16n');
+                console.log('Sequencer initialized');
+            } catch (error) {
+                console.error('Error starting audio:', error);
+                alert('Audio initialization failed. Please try again.');
+            }
         });
 
-        playStopButton.addEventListener('click', () => {
+        playStopButton.addEventListener('click', async () => {
             isPlaying = !isPlaying;
             if (isPlaying) {
+                // iOS audio context fix
+                if (Tone.context.state !== 'running') {
+                    await Tone.context.resume();
+                }
                 Tone.Transport.start();
                 playStopButton.innerHTML = '⏸ Pause';
                 playStopButton.classList.remove('bg-green-600', 'hover:bg-green-500');
@@ -923,6 +1068,11 @@
                         setTimeout(() => {
                             e.target.style.transform = '';
                         }, 200);
+                        
+                        // iOS audio context check
+                        if (Tone.context.state !== 'running') {
+                            Tone.context.resume();
+                        }
                         
                         // Play the sound
                         if (instrumentName === 'Snare' || instrumentName === 'Hihat' || instrumentName === 'Open Hat') {
@@ -1039,6 +1189,124 @@
             if (touchDuration < 300 && e.target.classList.contains('step')) {
                 e.preventDefault();
                 e.target.click();
+            }
+        });
+        
+        // Mute/Solo/EQ event handlers
+        gridContainer.addEventListener('click', (e) => {
+            // Mute button
+            if (e.target.classList.contains('mute-btn')) {
+                const instrumentName = e.target.dataset.instrument;
+                muteStates[instrumentName] = !muteStates[instrumentName];
+                
+                if (muteStates[instrumentName]) {
+                    e.target.classList.add('bg-red-600', 'hover:bg-red-500');
+                    e.target.classList.remove('bg-gray-600', 'hover:bg-gray-500');
+                } else {
+                    e.target.classList.remove('bg-red-600', 'hover:bg-red-500');
+                    e.target.classList.add('bg-gray-600', 'hover:bg-gray-500');
+                }
+                
+                updateChannelStates();
+            }
+            
+            // Solo button
+            if (e.target.classList.contains('solo-btn')) {
+                const instrumentName = e.target.dataset.instrument;
+                soloStates[instrumentName] = !soloStates[instrumentName];
+                
+                if (soloStates[instrumentName]) {
+                    e.target.classList.add('bg-yellow-600', 'hover:bg-yellow-500');
+                    e.target.classList.remove('bg-gray-600', 'hover:bg-gray-500');
+                } else {
+                    e.target.classList.remove('bg-yellow-600', 'hover:bg-yellow-500');
+                    e.target.classList.add('bg-gray-600', 'hover:bg-gray-500');
+                }
+                
+                updateChannelStates();
+            }
+            
+            // EQ button
+            if (e.target.classList.contains('eq-btn')) {
+                const instrumentName = e.target.dataset.instrument;
+                openEQPanel(instrumentName);
+            }
+        });
+        
+        // EQ Panel functions
+        let currentEQInstrument = null;
+        const eqPanel = document.getElementById('eq-panel');
+        const eqInstrumentName = document.getElementById('eq-instrument-name');
+        const eqLow = document.getElementById('eq-low');
+        const eqMid = document.getElementById('eq-mid');
+        const eqHigh = document.getElementById('eq-high');
+        const eqLowValue = document.getElementById('eq-low-value');
+        const eqMidValue = document.getElementById('eq-mid-value');
+        const eqHighValue = document.getElementById('eq-high-value');
+        const closeEqBtn = document.getElementById('close-eq');
+        const resetEqBtn = document.getElementById('reset-eq');
+        
+        function openEQPanel(instrumentName) {
+            currentEQInstrument = instrumentName;
+            eqInstrumentName.textContent = instrumentName;
+            
+            // Load current EQ values
+            const eq = instrumentEQs[instrumentName];
+            eqLow.value = eq.low.value;
+            eqMid.value = eq.mid.value;
+            eqHigh.value = eq.high.value;
+            
+            eqLowValue.textContent = `${eq.low.value} dB`;
+            eqMidValue.textContent = `${eq.mid.value} dB`;
+            eqHighValue.textContent = `${eq.high.value} dB`;
+            
+            eqPanel.classList.remove('hidden');
+        }
+        
+        function closeEQPanel() {
+            eqPanel.classList.add('hidden');
+            currentEQInstrument = null;
+        }
+        
+        closeEqBtn.addEventListener('click', closeEQPanel);
+        
+        eqLow.addEventListener('input', (e) => {
+            if (currentEQInstrument) {
+                const value = parseFloat(e.target.value);
+                instrumentEQs[currentEQInstrument].low.value = value;
+                eqLowValue.textContent = `${value} dB`;
+            }
+        });
+        
+        eqMid.addEventListener('input', (e) => {
+            if (currentEQInstrument) {
+                const value = parseFloat(e.target.value);
+                instrumentEQs[currentEQInstrument].mid.value = value;
+                eqMidValue.textContent = `${value} dB`;
+            }
+        });
+        
+        eqHigh.addEventListener('input', (e) => {
+            if (currentEQInstrument) {
+                const value = parseFloat(e.target.value);
+                instrumentEQs[currentEQInstrument].high.value = value;
+                eqHighValue.textContent = `${value} dB`;
+            }
+        });
+        
+        resetEqBtn.addEventListener('click', () => {
+            if (currentEQInstrument) {
+                instrumentEQs[currentEQInstrument].low.value = 0;
+                instrumentEQs[currentEQInstrument].mid.value = 0;
+                instrumentEQs[currentEQInstrument].high.value = 0;
+                
+                eqLow.value = 0;
+                eqMid.value = 0;
+                eqHigh.value = 0;
+                
+                eqLowValue.textContent = '0 dB';
+                eqMidValue.textContent = '0 dB';
+                eqHighValue.textContent = '0 dB';
             }
         });
     </script>
