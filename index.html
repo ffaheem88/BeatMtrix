@@ -2,7 +2,7 @@
 <html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Beat Maker Pro - Easy Loop Station</title>
     
     <!-- Tailwind CSS for styling -->
@@ -934,55 +934,32 @@
 
         // Event Listeners
         startButton.addEventListener('click', async () => {
-            try {
-                // iOS requires user interaction to start audio
-                await Tone.start();
-                console.log('Audio context started, state:', Tone.context.state);
-                
-                // For iOS, we need to create a silent buffer to "wake up" the audio
-                const buffer = Tone.context.createBuffer(1, 1, Tone.context.sampleRate);
-                const source = Tone.context.createBufferSource();
-                source.buffer = buffer;
-                source.connect(Tone.context.destination);
-                source.start(0);
-                
-                // Additional iOS audio fix
-                if (Tone.context.state !== 'running') {
-                    await Tone.context.resume();
-                }
-                
-                startScreen.classList.add('hidden');
-                mainControls.classList.remove('hidden');
-                presets.classList.remove('hidden');
-                sequencer.classList.remove('hidden');
-                info.classList.remove('hidden');
-                templateStatus.classList.remove('hidden');
-                createSynths();
-                createGrid();
-                createTemplateSlots();
-                
-                // Set up transport
-                Tone.Transport.cancel(); // Clear any existing events
-                Tone.Transport.bpm.value = 120;
-                Tone.Transport.loop = true;
-                Tone.Transport.loopEnd = '1m'; // 1 measure loop
-                
-                // Schedule the sequence
-                const loopEvent = Tone.Transport.scheduleRepeat(sequenceLoop, '16n');
-                console.log('Sequencer initialized');
-            } catch (error) {
-                console.error('Error starting audio:', error);
-                alert('Audio initialization failed. Please try again.');
-            }
+            await Tone.start();
+            console.log('Audio context started');
+            startScreen.classList.add('hidden');
+            mainControls.classList.remove('hidden');
+            presets.classList.remove('hidden');
+            sequencer.classList.remove('hidden');
+            info.classList.remove('hidden');
+            templateStatus.classList.remove('hidden');
+            createSynths();
+            createGrid();
+            createTemplateSlots();
+            
+            // Set up transport
+            Tone.Transport.cancel(); // Clear any existing events
+            Tone.Transport.bpm.value = 120;
+            Tone.Transport.loop = true;
+            Tone.Transport.loopEnd = '1m'; // 1 measure loop
+            
+            // Schedule the sequence
+            const loopEvent = Tone.Transport.scheduleRepeat(sequenceLoop, '16n');
+            console.log('Sequencer initialized');
         });
 
-        playStopButton.addEventListener('click', async () => {
+        playStopButton.addEventListener('click', () => {
             isPlaying = !isPlaying;
             if (isPlaying) {
-                // iOS audio context fix
-                if (Tone.context.state !== 'running') {
-                    await Tone.context.resume();
-                }
                 Tone.Transport.start();
                 playStopButton.innerHTML = '⏸ Pause';
                 playStopButton.classList.remove('bg-green-600', 'hover:bg-green-500');
@@ -1068,11 +1045,6 @@
                         setTimeout(() => {
                             e.target.style.transform = '';
                         }, 200);
-                        
-                        // iOS audio context check
-                        if (Tone.context.state !== 'running') {
-                            Tone.context.resume();
-                        }
                         
                         // Play the sound
                         if (instrumentName === 'Snare' || instrumentName === 'Hihat' || instrumentName === 'Open Hat') {
