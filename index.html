@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Beat Maker Pro - Easy Loop Station</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Tone.js for Web Audio -->
+    <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .step {
+            transition: all 0.1s ease-in-out;
+            border: 1px solid #4b5563;
+        }
+
+        @media (min-width: 640px) {
+            .step {
+                border-width: 2px;
+            }
+        }
+
+        .step.active {
+            background-color: #3b82f6;
+            border-color: #60a5fa;
+            transform: scale(0.95);
+        }
+
+        .step.playing {
+            box-shadow: 0 0 15px rgba(251, 191, 36, 0.8);
+            border-color: #fbbf24;
+            transform: scale(1.05);
+        }
+
+        .step.active.playing {
+            background-color: #60a5fa;
+            box-shadow: 0 0 20px rgba(96, 165, 250, 1);
+            transform: scale(1);
+        }
+
+        .instrument-row {
+            border-bottom: 1px solid #374151;
+        }
+
+        .instrument-row:last-child {
+            border-bottom: none;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+        }
+
+        input[type=range]::-webkit-slider-track {
+            height: 6px;
+            background: #374151;
+            border-radius: 3px;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            background: #60a5fa;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .preset-btn {
+            transition: all 0.2s ease;
+        }
+
+        .preset-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .instrument-icon {
+            transition: all 0.2s ease;
+        }
+
+        .instrument-icon:hover {
+            filter: brightness(1.3);
+            text-shadow: 0 0 10px currentColor;
+        }
+
+        .instrument-icon:active {
+            transform: scale(1.3);
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .recording {
+            animation: pulse 1s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white h-full overflow-x-hidden">
+    
+    <div class="min-h-screen p-4 max-w-7xl mx-auto">
+        
+        <!-- Header -->
+        <header class="mb-4 sm:mb-6 text-center">
+            <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent mb-1 sm:mb-2">
+                Beat Maker Pro
+            </h1>
+            <p class="text-gray-400 text-sm sm:text-base">Create awesome beats with ease!</p>
+        </header>
+
+        <!-- Start Screen -->
+        <div id="start-screen" class="fixed inset-0 bg-gray-900 bg-opacity-95 flex items-center justify-center z-50 p-4">
+            <div class="text-center">
+                <h2 class="text-2xl sm:text-3xl font-bold mb-4">Welcome to Beat Maker Pro!</h2>
+                <p class="text-gray-400 mb-8 text-sm sm:text-base">Tap start to begin making beats</p>
+                <button id="start-button" class="px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold rounded-full text-lg sm:text-xl shadow-2xl hover:shadow-3xl transform hover:scale-105 transition-all">
+                    Start Making Beats
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Controls -->
+        <div id="main-controls" class="hidden bg-gray-800 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6 shadow-xl">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+                
+                <!-- Transport Controls -->
+                <div class="flex items-center space-x-2 sm:space-x-4 col-span-1 sm:col-span-2 lg:col-span-1">
+                    <button id="play-stop" class="flex-1 px-4 sm:px-6 py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg text-base sm:text-lg shadow-lg transition-all">
+                        ▶ Play
+                    </button>
+                    <button id="clear-all" class="px-3 sm:px-4 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg shadow-lg transition-all text-sm sm:text-base">
+                        Clear
+                    </button>
+                </div>
+
+                <!-- BPM Control -->
+                <div class="flex items-center space-x-2 sm:space-x-4">
+                    <label class="text-xs sm:text-sm font-medium text-gray-300 whitespace-nowrap">BPM</label>
+                    <input type="range" id="bpm-slider" min="60" max="180" value="120" class="flex-1">
+                    <span id="bpm-value" class="font-mono text-sm sm:text-lg text-blue-400 w-10 sm:w-12 text-center">120</span>
+                </div>
+
+                <!-- Pattern Length -->
+                <div class="flex items-center space-x-2">
+                    <label class="text-xs sm:text-sm font-medium text-gray-300 whitespace-nowrap">Steps</label>
+                    <select id="pattern-length" class="bg-gray-700 border border-gray-600 rounded-lg px-2 sm:px-3 py-2 text-sm sm:text-base text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <option value="8" selected>8</option>
+                        <option value="16">16</option>
+                        <option value="32">32</option>
+                    </select>
+                </div>
+                
+                <!-- Pad Tune Selector -->
+                <div class="flex items-center space-x-2">
+                    <label class="text-xs sm:text-sm font-medium text-gray-300 whitespace-nowrap">Pad</label>
+                    <select id="pad-tune" class="bg-gray-700 border border-gray-600 rounded-lg px-2 sm:px-3 py-2 text-sm sm:text-base text-white focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                        <option value="C">C Major</option>
+                        <option value="G">G Major</option>
+                        <option value="D">D Major</option>
+                        <option value="A">A Major</option>
+                        <option value="F">F Major</option>
+                        <option value="Am">A Minor</option>
+                        <option value="Em">E Minor</option>
+                        <option value="Dm">D Minor</option>
+                    </select>
+                </div>
+                
+                <!-- Lead Melody Selector -->
+                <div class="flex items-center space-x-2">
+                    <label class="text-xs sm:text-sm font-medium text-gray-300 whitespace-nowrap">Lead</label>
+                    <select id="lead-style" class="bg-gray-700 border border-gray-600 rounded-lg px-2 sm:px-3 py-2 text-sm sm:text-base text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <option value="arpeggio">Arpeggio</option>
+                        <option value="melody">Melody</option>
+                        <option value="scale">Scale Run</option>
+                        <option value="chords">Chord Stabs</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preset Patterns -->
+        <div id="presets" class="hidden bg-gray-800 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 shadow-xl">
+            <h3 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3 text-gray-300">Quick Start Patterns</h3>
+            <div class="grid grid-cols-2 gap-2 sm:gap-3">
+                <button class="preset-btn px-3 sm:px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg font-medium text-sm sm:text-base" data-preset="basic-beat">
+                    Basic Beat
+                </button>
+                <button class="preset-btn px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-sm sm:text-base" data-preset="funky">
+                    Funky
+                </button>
+                <button class="preset-btn px-3 sm:px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg font-medium text-sm sm:text-base" data-preset="trap">
+                    Trap
+                </button>
+                <button class="preset-btn px-3 sm:px-4 py-2 bg-pink-600 hover:bg-pink-500 rounded-lg font-medium text-sm sm:text-base" data-preset="house">
+                    House
+                </button>
+            </div>
+        </div>
+
+        <!-- Sequencer Grid -->
+        <div id="sequencer" class="hidden bg-gray-800 rounded-xl p-2 sm:p-4 shadow-xl overflow-x-auto">
+            <!-- Mobile scroll hint -->
+            <div class="sm:hidden text-xs text-gray-400 text-center mb-2 flex items-center justify-center space-x-2">
+                <span>←</span>
+                <span>Swipe to see more steps</span>
+                <span>→</span>
+            </div>
+            <div id="grid-container" class="min-w-max">
+                <!-- Grid will be generated here -->
+            </div>
+        </div>
+
+        <!-- Template Status -->
+        <div id="template-status" class="hidden bg-gray-800 rounded-xl p-3 sm:p-4 mb-4 shadow-xl">
+            <h3 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3 text-gray-300">Active Templates</h3>
+            <div id="template-list" class="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-9 gap-2">
+                <!-- Template slots will be generated here -->
+            </div>
+            <div class="mt-3 flex flex-col sm:flex-row items-center justify-between space-y-2 sm:space-y-0">
+                <button id="save-template-btn" class="sm:hidden px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg text-sm w-full">
+                    Save Pattern
+                </button>
+                <div class="text-xs sm:text-sm text-gray-400 hidden sm:block">
+                    Press <kbd class="px-1 sm:px-2 py-1 bg-gray-700 rounded text-xs">Enter</kbd> to save • 
+                    Press <kbd class="px-1 sm:px-2 py-1 bg-gray-700 rounded text-xs">1-9</kbd> to play/pause
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Panel -->
+        <div id="info" class="hidden mt-4 sm:mt-6 bg-gray-800 rounded-xl p-3 sm:p-4 shadow-xl">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+                <div class="text-xs sm:text-sm text-gray-400">
+                    <span class="font-medium">Tips:</span> <span class="hidden sm:inline">Click squares to add beats • Use presets to get started</span>
+                    <span class="sm:hidden">Tap squares to add beats</span>
+                </div>
+                <div class="flex items-center space-x-2 sm:space-x-4">
+                    <span class="text-xs sm:text-sm text-gray-400">Volume</span>
+                    <input type="range" id="volume-slider" min="0" max="100" value="80" class="w-20 sm:w-24">
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // DOM Elements
+        const startButton = document.getElementById('start-button');
+        const startScreen = document.getElementById('start-screen');
+        const mainControls = document.getElementById('main-controls');
+        const presets = document.getElementById('presets');
+        const sequencer = document.getElementById('sequencer');
+        const info = document.getElementById('info');
+        const playStopButton = document.getElementById('play-stop');
+        const clearAllButton = document.getElementById('clear-all');
+        const bpmSlider = document.getElementById('bpm-slider');
+        const bpmValue = document.getElementById('bpm-value');
+        const patternLengthSelect = document.getElementById('pattern-length');
+        const volumeSlider = document.getElementById('volume-slider');
+        const gridContainer = document.getElementById('grid-container');
+        const padTuneSelect = document.getElementById('pad-tune');
+        const leadStyleSelect = document.getElementById('lead-style');
+        const templateStatus = document.getElementById('template-status');
+        const templateList = document.getElementById('template-list');
+        const saveTemplateBtn = document.getElementById('save-template-btn');
+
+        // State
+        let isPlaying = false;
+        let currentStep = 0;
+        let numSteps = 8; // Start with 8 steps for mobile
+        let gridState = [];
+        let synths = {};
+        let volume;
+        let currentPadKey = 'C';
+        let currentLeadStyle = 'arpeggio';
+        
+        // Template system
+        let templates = {};
+        let nextTemplateNumber = 1;
+        let templateLoops = {};
+        
+        // Lead melodies and patterns
+        const leadPatterns = {
+            arpeggio: {
+                'C': ['C4', 'E4', 'G4', 'C5', 'G4', 'E4', 'C4', 'G3', 'C4', 'E4', 'G4', 'E4', 'C4', 'G3', 'E3', 'C3'],
+                'G': ['G4', 'B4', 'D5', 'G5', 'D5', 'B4', 'G4', 'D4', 'G4', 'B4', 'D5', 'B4', 'G4', 'D4', 'B3', 'G3'],
+                'Am': ['A4', 'C5', 'E5', 'A5', 'E5', 'C5', 'A4', 'E4', 'A4', 'C5', 'E5', 'C5', 'A4', 'E4', 'C4', 'A3']
+            },
+            melody: {
+                'C': ['C5', 'D5', 'E5', 'G5', 'G5', 'E5', 'D5', 'C5', 'E5', 'D5', 'C5', 'G4', 'C5', 'D5', 'E5', 'C5'],
+                'G': ['G5', 'A5', 'B5', 'D6', 'D6', 'B5', 'A5', 'G5', 'B5', 'A5', 'G5', 'D5', 'G5', 'A5', 'B5', 'G5'],
+                'Am': ['A5', 'G5', 'F5', 'E5', 'D5', 'C5', 'D5', 'E5', 'A4', 'C5', 'E5', 'G5', 'F5', 'E5', 'D5', 'C5']
+            },
+            scale: {
+                'C': ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5', 'C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'],
+                'G': ['G4', 'A4', 'B4', 'C5', 'D5', 'E5', 'F#5', 'G5', 'G5', 'F#5', 'E5', 'D5', 'C5', 'B4', 'A4', 'G4'],
+                'Am': ['A4', 'B4', 'C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'A5', 'G5', 'F5', 'E5', 'D5', 'C5', 'B4', 'A4']
+            },
+            chords: {
+                'C': [['C4', 'E4', 'G4'], null, ['C4', 'E4', 'G4'], null, ['F4', 'A4', 'C5'], null, ['G4', 'B4', 'D5'], null, ['C4', 'E4', 'G4'], null, ['G4', 'B4', 'D5'], null, ['F4', 'A4', 'C5'], null, ['C4', 'E4', 'G4'], null],
+                'G': [['G4', 'B4', 'D5'], null, ['G4', 'B4', 'D5'], null, ['C5', 'E5', 'G5'], null, ['D5', 'F#5', 'A5'], null, ['G4', 'B4', 'D5'], null, ['D5', 'F#5', 'A5'], null, ['C5', 'E5', 'G5'], null, ['G4', 'B4', 'D5'], null],
+                'Am': [['A4', 'C5', 'E5'], null, ['A4', 'C5', 'E5'], null, ['F4', 'A4', 'C5'], null, ['G4', 'B4', 'D5'], null, ['A4', 'C5', 'E5'], null, ['G4', 'B4', 'D5'], null, ['F4', 'A4', 'C5'], null, ['A4', 'C5', 'E5'], null]
+            }
+        };
+        
+        // Chord progressions for different keys
+        const padChords = {
+            'C': [['C3', 'E3', 'G3'], ['F3', 'A3', 'C4'], ['G3', 'B3', 'D4'], ['C3', 'E3', 'G3']],
+            'G': [['G3', 'B3', 'D4'], ['C4', 'E4', 'G4'], ['D4', 'F#4', 'A4'], ['G3', 'B3', 'D4']],
+            'D': [['D3', 'F#3', 'A3'], ['G3', 'B3', 'D4'], ['A3', 'C#4', 'E4'], ['D3', 'F#3', 'A3']],
+            'A': [['A3', 'C#4', 'E4'], ['D4', 'F#4', 'A4'], ['E4', 'G#4', 'B4'], ['A3', 'C#4', 'E4']],
+            'F': [['F3', 'A3', 'C4'], ['Bb3', 'D4', 'F4'], ['C4', 'E4', 'G4'], ['F3', 'A3', 'C4']],
+            'Am': [['A3', 'C4', 'E4'], ['F3', 'A3', 'C4'], ['G3', 'B3', 'D4'], ['A3', 'C4', 'E4']],
+            'Em': [['E3', 'G3', 'B3'], ['C3', 'E3', 'G3'], ['D3', 'F#3', 'A3'], ['E3', 'G3', 'B3']],
+            'Dm': [['D3', 'F3', 'A3'], ['Bb3', 'D4', 'F4'], ['C4', 'E4', 'G4'], ['D3', 'F3', 'A3']]
+        };
+
+        // Instrument definitions with better variety
+        const instrumentGroups = {
+            drums: [
+                { name: 'Kick', color: 'red', icon: '🥁' },
+                { name: 'Snare', color: 'orange', icon: '🎯' },
+                { name: 'Hihat', color: 'yellow', icon: '🎩' },
+                { name: 'Open Hat', color: 'green', icon: '🔔' },
+            ],
+            bass: [
+                { name: 'Bass', color: 'purple', icon: '🎸' },
+                { name: 'Sub Bass', color: 'indigo', icon: '🔊' },
+            ],
+            synths: [
+                { name: 'Lead', color: 'blue', icon: '🎹' },
+                { name: 'Pad', color: 'pink', icon: '🌊' },
+            ],
+            fx: [
+                { name: 'FX 1', color: 'teal', icon: '✨' },
+                { name: 'FX 2', color: 'cyan', icon: '🌟' },
+            ]
+        };
+
+        const allInstruments = Object.values(instrumentGroups).flat();
+
+        // Initialize synths
+        function createSynths() {
+            // Clean up old synths
+            Object.values(synths).forEach(synth => {
+                try { synth.dispose(); } catch (e) {}
+            });
+
+            // Create volume control
+            volume = new Tone.Volume(-6).toDestination();
+
+            synths = {
+                'Kick': new Tone.MembraneSynth({
+                    pitchDecay: 0.05,
+                    octaves: 10,
+                    oscillator: { type: 'sine' },
+                    envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4 }
+                }).connect(volume),
+
+                'Snare': new Tone.NoiseSynth({
+                    noise: { type: 'white' },
+                    envelope: { attack: 0.001, decay: 0.2, sustain: 0, release: 0.2 }
+                }).connect(volume),
+
+                'Hihat': new Tone.MetalSynth({
+                    frequency: 250,
+                    envelope: { attack: 0.001, decay: 0.06, release: 0.01 },
+                    harmonicity: 5.1,
+                    modulationIndex: 32,
+                    resonance: 4000,
+                    octaves: 1.5
+                }).connect(volume),
+
+                'Open Hat': new Tone.MetalSynth({
+                    frequency: 250,
+                    envelope: { attack: 0.001, decay: 0.3, release: 0.2 },
+                    harmonicity: 5.1,
+                    modulationIndex: 32,
+                    resonance: 4000,
+                    octaves: 1.5
+                }).connect(volume),
+
+                'Bass': new Tone.MonoSynth({
+                    oscillator: { type: 'sawtooth' },
+                    envelope: { attack: 0.01, decay: 0.3, sustain: 0.4, release: 0.8 },
+                    filter: { Q: 2, type: 'lowpass', rolloff: -24 },
+                    filterEnvelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0.8, baseFrequency: 200, octaves: 2.5 }
+                }).connect(volume),
+
+                'Sub Bass': new Tone.MonoSynth({
+                    oscillator: { type: 'sine' },
+                    envelope: { attack: 0.02, decay: 0.5, sustain: 0.5, release: 1 },
+                    filter: { Q: 1, type: 'lowpass', rolloff: -12 },
+                    filterEnvelope: { attack: 0.02, decay: 0.2, sustain: 0.8, release: 1, baseFrequency: 100, octaves: 1 }
+                }).connect(volume),
+
+                'Lead': new Tone.PolySynth(Tone.Synth, {
+                    oscillator: { type: 'square' },
+                    envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 0.8 }
+                }).connect(volume),
+
+                'Pad': new Tone.PolySynth(Tone.Synth, {
+                    oscillator: { type: 'triangle' },
+                    envelope: { attack: 0.5, decay: 0.5, sustain: 0.8, release: 2 }
+                }).connect(volume),
+
+                'FX 1': new Tone.PluckSynth({
+                    attackNoise: 3,
+                    dampening: 4000,
+                    resonance: 0.9
+                }).connect(volume),
+
+                'FX 2': new Tone.FMSynth({
+                    harmonicity: 8,
+                    modulationIndex: 10,
+                    envelope: { attack: 0.001, decay: 0.2, sustain: 0, release: 0.2 }
+                }).connect(volume)
+            };
+        }
+
+        // Create grid
+        function createGrid() {
+            gridContainer.innerHTML = '';
+            gridState = [];
+
+            // Create header row with step numbers
+            const headerRow = document.createElement('div');
+            headerRow.className = 'flex items-center mb-1 sm:mb-2';
+            headerRow.innerHTML = '<div class="w-12 sm:w-24 md:w-32"></div>';
+            
+            const stepsHeader = document.createElement('div');
+            stepsHeader.className = 'flex gap-0.5 sm:gap-1';
+            
+            for (let i = 0; i < numSteps; i++) {
+                const stepNum = document.createElement('div');
+                stepNum.className = 'w-10 sm:w-10 md:w-12 flex-shrink-0 text-xs text-gray-500 text-center font-bold';
+                stepNum.textContent = (i % 4 === 0) ? Math.floor(i / 4) + 1 : '';
+                if (i % 4 === 0 && i !== 0) {
+                    stepNum.classList.add('ml-2', 'sm:ml-2');
+                }
+                stepsHeader.appendChild(stepNum);
+            }
+            headerRow.appendChild(stepsHeader);
+            gridContainer.appendChild(headerRow);
+
+            // Create instrument rows
+            allInstruments.forEach((inst, rowIndex) => {
+                const row = document.createElement('div');
+                row.className = 'instrument-row flex items-center py-1 sm:py-2';
+
+                // Instrument label
+                const label = document.createElement('div');
+                label.className = 'w-12 sm:w-24 md:w-32 flex items-center justify-center sm:justify-start space-x-1 sm:space-x-2 pr-1 sm:pr-4';
+                
+                const iconButton = document.createElement('button');
+                iconButton.className = 'instrument-icon text-base sm:text-xl md:text-2xl hover:scale-110 transition-transform cursor-pointer focus:outline-none p-1';
+                iconButton.innerHTML = inst.icon;
+                iconButton.title = `Click to preview ${inst.name}`;
+                iconButton.dataset.instrument = inst.name;
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'font-medium text-xs sm:text-sm hidden sm:inline';
+                nameSpan.textContent = inst.name;
+                
+                label.appendChild(iconButton);
+                label.appendChild(nameSpan);
+                row.appendChild(label);
+
+                // Steps grid
+                const stepsContainer = document.createElement('div');
+                stepsContainer.className = 'flex gap-0.5 sm:gap-1';
+
+                const instrumentGridRow = [];
+                for (let step = 0; step < numSteps; step++) {
+                    const cell = document.createElement('button');
+                    // Bigger touch targets on mobile: 10x10 minimum
+                    cell.className = `step h-10 w-10 sm:h-10 sm:w-10 md:h-12 md:w-12 flex-shrink-0 rounded sm:rounded-md md:rounded-lg bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-${inst.color}-500`;
+                    cell.dataset.row = rowIndex;
+                    cell.dataset.col = step;
+                    
+                    // Add beat markers - visual grouping every 4 beats
+                    if (step % 4 === 0 && step !== 0) {
+                        cell.classList.add('ml-2', 'sm:ml-2');
+                    }
+
+                    stepsContainer.appendChild(cell);
+                    instrumentGridRow.push(false);
+                }
+
+                row.appendChild(stepsContainer);
+                gridContainer.appendChild(row);
+                gridState.push(instrumentGridRow);
+            });
+        }
+
+        // Sequencer loop
+        const sequenceLoop = (time) => {
+            Tone.Draw.schedule(() => {
+                document.querySelectorAll('.step').forEach(el => {
+                    el.classList.remove('playing');
+                    if (el.dataset.col == currentStep) {
+                        el.classList.add('playing');
+                    }
+                });
+            }, time);
+
+            allInstruments.forEach((inst, rowIndex) => {
+                if (gridState[rowIndex] && gridState[rowIndex][currentStep]) {
+                    const synth = synths[inst.name];
+                    if (synth) {
+                        try {
+                            const notes = {
+                                'Kick': 'C1',
+                                'Snare': 'D1',
+                                'Hihat': 'F#1',
+                                'Open Hat': 'A#1',
+                                'Bass': ['C2', 'E2', 'G2', 'C3'][currentStep % 4],
+                                'Sub Bass': ['C1', 'C1', 'G1', 'C1'][currentStep % 4],
+                                'Lead': (() => {
+                                    const key = currentPadKey.replace('m', ''); // Remove 'm' from minor keys
+                                    const patterns = leadPatterns[currentLeadStyle];
+                                    const pattern = patterns[key] || patterns['C'];
+                                    return pattern[currentStep % pattern.length];
+                                })(),
+                                'Pad': padChords[currentPadKey][currentStep % 4],
+                                'FX 1': 'C4',
+                                'FX 2': 'G4'
+                            };
+                            
+                            const note = notes[inst.name] || 'C3';
+                            const duration = inst.name === 'Pad' ? '2n' : '16n';
+                            
+                            // Use different triggering for different synth types
+                            if (inst.name === 'Snare' || inst.name === 'Hihat' || inst.name === 'Open Hat') {
+                                synth.triggerAttackRelease(duration, time);
+                            } else if (Array.isArray(note)) {
+                                synth.triggerAttackRelease(note, duration, time);
+                            } else {
+                                synth.triggerAttackRelease(note, duration, time);
+                            }
+                        } catch (e) {
+                            console.warn(`Error playing ${inst.name}:`, e);
+                        }
+                    }
+                }
+            });
+
+            currentStep = (currentStep + 1) % numSteps;
+        };
+
+        // Preset patterns
+        const presetPatterns = {
+            'basic-beat': {
+                'Kick': [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+                'Snare': [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+                'Hihat': [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            },
+            'funky': {
+                'Kick': [1,0,0,1,0,0,1,0,1,0,0,0,1,0,1,0],
+                'Snare': [0,0,1,0,0,1,0,0,0,0,1,0,0,0,0,1],
+                'Hihat': [1,0,1,1,0,1,1,0,1,0,1,1,0,1,0,1],
+                'Bass': [1,0,0,1,0,0,0,0,1,0,0,0,1,0,0,0],
+            },
+            'trap': {
+                'Kick': [1,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0],
+                'Snare': [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+                'Hihat': [1,1,1,1,1,1,1,1,0,1,1,1,0,1,1,1],
+                'Sub Bass': [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+            },
+            'house': {
+                'Kick': [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+                'Open Hat': [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
+                'Bass': [1,0,0,1,0,0,0,0,1,0,0,1,0,0,0,0],
+                'Pad': [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+            }
+        };
+
+        // Create template UI
+        function createTemplateSlots() {
+            templateList.innerHTML = '';
+            for (let i = 1; i <= 9; i++) {
+                const slot = document.createElement('div');
+                slot.id = `template-slot-${i}`;
+                slot.className = 'template-slot text-center p-2 sm:p-3 bg-gray-700 rounded-lg cursor-pointer hover:bg-gray-600 transition-all';
+                slot.innerHTML = `
+                    <div class="text-lg sm:text-xl md:text-2xl font-bold text-gray-500">${i}</div>
+                    <div class="text-xs text-gray-400 hidden sm:block">Empty</div>
+                `;
+                templateList.appendChild(slot);
+            }
+        }
+
+        // Save current pattern as template
+        function saveTemplate(number) {
+            if (number < 1 || number > 9) return;
+            
+            // Deep copy current state
+            const templateData = {
+                pattern: gridState.map(row => [...row]),
+                padKey: currentPadKey,
+                leadStyle: currentLeadStyle,
+                steps: numSteps
+            };
+            
+            templates[number] = templateData;
+            console.log(`Template ${number} saved:`, templateData);
+            
+            // Update UI
+            const slot = document.getElementById(`template-slot-${number}`);
+            slot.innerHTML = `
+                <div class="text-lg sm:text-xl md:text-2xl font-bold text-blue-400">${number}</div>
+                <div class="text-xs text-green-400 hidden sm:block">Saved</div>
+            `;
+            slot.classList.add('ring-1', 'sm:ring-2', 'ring-blue-400');
+            
+            // Clear current grid
+            clearAllButton.click();
+        }
+
+        // Create separate synths for each template to avoid conflicts
+        function createTemplateSynths(templateNumber) {
+            const templateSynths = {};
+            const templateVolume = new Tone.Volume(-6).toDestination();
+            
+            templateSynths['Kick'] = new Tone.MembraneSynth({
+                pitchDecay: 0.05,
+                octaves: 10,
+                oscillator: { type: 'sine' },
+                envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4 }
+            }).connect(templateVolume);
+
+            templateSynths['Snare'] = new Tone.NoiseSynth({
+                noise: { type: 'white' },
+                envelope: { attack: 0.001, decay: 0.2, sustain: 0, release: 0.2 }
+            }).connect(templateVolume);
+
+            templateSynths['Hihat'] = new Tone.MetalSynth({
+                frequency: 250,
+                envelope: { attack: 0.001, decay: 0.06, release: 0.01 },
+                harmonicity: 5.1,
+                modulationIndex: 32,
+                resonance: 4000,
+                octaves: 1.5
+            }).connect(templateVolume);
+
+            templateSynths['Open Hat'] = new Tone.MetalSynth({
+                frequency: 250,
+                envelope: { attack: 0.001, decay: 0.3, release: 0.2 },
+                harmonicity: 5.1,
+                modulationIndex: 32,
+                resonance: 4000,
+                octaves: 1.5
+            }).connect(templateVolume);
+
+            templateSynths['Bass'] = new Tone.MonoSynth({
+                oscillator: { type: 'sawtooth' },
+                envelope: { attack: 0.01, decay: 0.3, sustain: 0.4, release: 0.8 },
+                filter: { Q: 2, type: 'lowpass', rolloff: -24 },
+                filterEnvelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0.8, baseFrequency: 200, octaves: 2.5 }
+            }).connect(templateVolume);
+
+            templateSynths['Sub Bass'] = new Tone.MonoSynth({
+                oscillator: { type: 'sine' },
+                envelope: { attack: 0.02, decay: 0.5, sustain: 0.5, release: 1 },
+                filter: { Q: 1, type: 'lowpass', rolloff: -12 },
+                filterEnvelope: { attack: 0.02, decay: 0.2, sustain: 0.8, release: 1, baseFrequency: 100, octaves: 1 }
+            }).connect(templateVolume);
+
+            templateSynths['Lead'] = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: 'square' },
+                envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 0.8 }
+            }).connect(templateVolume);
+
+            templateSynths['Pad'] = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: 'triangle' },
+                envelope: { attack: 0.5, decay: 0.5, sustain: 0.8, release: 2 }
+            }).connect(templateVolume);
+
+            templateSynths['FX 1'] = new Tone.PluckSynth({
+                attackNoise: 3,
+                dampening: 4000,
+                resonance: 0.9
+            }).connect(templateVolume);
+
+            templateSynths['FX 2'] = new Tone.FMSynth({
+                harmonicity: 8,
+                modulationIndex: 10,
+                envelope: { attack: 0.001, decay: 0.2, sustain: 0, release: 0.2 }
+            }).connect(templateVolume);
+            
+            return { synths: templateSynths, volume: templateVolume };
+        }
+
+        // Play/pause template
+        function toggleTemplate(number) {
+            if (!templates[number]) return;
+            
+            const slot = document.getElementById(`template-slot-${number}`);
+            
+            if (templateLoops[number]) {
+                // Stop template
+                if (templateLoops[number].sequence) {
+                    templateLoops[number].sequence.stop();
+                    templateLoops[number].sequence.dispose();
+                }
+                // Dispose of template synths
+                if (templateLoops[number].synths) {
+                    Object.values(templateLoops[number].synths).forEach(synth => {
+                        try { synth.dispose(); } catch (e) {}
+                    });
+                }
+                if (templateLoops[number].volume) {
+                    try { templateLoops[number].volume.dispose(); } catch (e) {}
+                }
+                delete templateLoops[number];
+                slot.classList.remove('bg-green-600', 'animate-pulse');
+                slot.classList.add('bg-gray-700');
+            } else {
+                // Start template
+                const template = templates[number];
+                const { synths: templateSynths, volume: templateVolume } = createTemplateSynths(number);
+                let templateStep = 0;
+                
+                console.log(`Starting template ${number}, transport state:`, Tone.Transport.state);
+                
+                // Create a dedicated sequence for this template
+                const sequence = new Tone.Sequence((time, step) => {
+                    // Play sounds from this template
+                    allInstruments.forEach((inst, rowIndex) => {
+                        if (template.pattern[rowIndex] && template.pattern[rowIndex][step]) {
+                            const synth = templateSynths[inst.name];
+                            if (synth) {
+                                try {
+                                    const notes = {
+                                        'Kick': 'C1',
+                                        'Snare': 'D1',
+                                        'Hihat': 'F#1',
+                                        'Open Hat': 'A#1',
+                                        'Bass': ['C2', 'E2', 'G2', 'C3'][step % 4],
+                                        'Sub Bass': ['C1', 'C1', 'G1', 'C1'][step % 4],
+                                        'Lead': (() => {
+                                            const key = template.padKey.replace('m', '');
+                                            const patterns = leadPatterns[template.leadStyle];
+                                            const pattern = patterns[key] || patterns['C'];
+                                            return pattern[step % pattern.length];
+                                        })(),
+                                        'Pad': padChords[template.padKey][step % 4],
+                                        'FX 1': 'C4',
+                                        'FX 2': 'G4'
+                                    };
+                                    
+                                    const note = notes[inst.name] || 'C3';
+                                    const duration = inst.name === 'Pad' ? '2n' : '16n';
+                                    
+                                    if (inst.name === 'Snare' || inst.name === 'Hihat' || inst.name === 'Open Hat') {
+                                        synth.triggerAttackRelease(duration, time);
+                                    } else if (Array.isArray(note)) {
+                                        synth.triggerAttackRelease(note, duration, time);
+                                    } else {
+                                        synth.triggerAttackRelease(note, duration, time);
+                                    }
+                                } catch (e) {
+                                    console.warn(`Error playing template ${number} ${inst.name}:`, e);
+                                }
+                            }
+                        }
+                    });
+                }, Array.from({length: template.steps}, (_, i) => i), '16n');
+                
+                sequence.start(0);
+                sequence.loop = true;
+                    
+                templateLoops[number] = { 
+                    sequence: sequence, 
+                    synths: templateSynths,
+                    volume: templateVolume 
+                };
+                slot.classList.remove('bg-gray-700');
+                slot.classList.add('bg-green-600', 'animate-pulse');
+                
+                // If transport isn't running, start it
+                if (Tone.Transport.state !== 'started') {
+                    Tone.Transport.start();
+                }
+            }
+        }
+
+        // Event Listeners
+        startButton.addEventListener('click', async () => {
+            await Tone.start();
+            console.log('Audio context started');
+            startScreen.classList.add('hidden');
+            mainControls.classList.remove('hidden');
+            presets.classList.remove('hidden');
+            sequencer.classList.remove('hidden');
+            info.classList.remove('hidden');
+            templateStatus.classList.remove('hidden');
+            createSynths();
+            createGrid();
+            createTemplateSlots();
+            
+            // Set up transport
+            Tone.Transport.cancel(); // Clear any existing events
+            Tone.Transport.bpm.value = 120;
+            Tone.Transport.loop = true;
+            Tone.Transport.loopEnd = '1m'; // 1 measure loop
+            
+            // Schedule the sequence
+            const loopEvent = Tone.Transport.scheduleRepeat(sequenceLoop, '16n');
+            console.log('Sequencer initialized');
+        });
+
+        playStopButton.addEventListener('click', () => {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                Tone.Transport.start();
+                playStopButton.innerHTML = '⏸ Pause';
+                playStopButton.classList.remove('bg-green-600', 'hover:bg-green-500');
+                playStopButton.classList.add('bg-yellow-600', 'hover:bg-yellow-500');
+            } else {
+                Tone.Transport.stop();
+                currentStep = 0;
+                playStopButton.innerHTML = '▶ Play';
+                playStopButton.classList.remove('bg-yellow-600', 'hover:bg-yellow-500');
+                playStopButton.classList.add('bg-green-600', 'hover:bg-green-500');
+                // Clear playing indicators
+                document.querySelectorAll('.step.playing').forEach(el => el.classList.remove('playing'));
+            }
+        });
+
+        clearAllButton.addEventListener('click', () => {
+            gridState = gridState.map(row => row.map(() => false));
+            document.querySelectorAll('.step.active').forEach(el => el.classList.remove('active'));
+        });
+
+        bpmSlider.addEventListener('input', (e) => {
+            const bpm = e.target.value;
+            Tone.Transport.bpm.value = bpm;
+            bpmValue.textContent = bpm;
+        });
+
+        volumeSlider.addEventListener('input', (e) => {
+            if (volume) {
+                volume.volume.value = (e.target.value - 100) * 0.4; // Convert to dB
+            }
+        });
+
+        patternLengthSelect.addEventListener('change', (e) => {
+            const wasPlaying = isPlaying;
+            if (wasPlaying) {
+                Tone.Transport.stop();
+                isPlaying = false;
+            }
+            
+            numSteps = parseInt(e.target.value);
+            currentStep = 0;
+            createGrid();
+            
+            // Update loop length based on steps
+            const measures = numSteps / 16; // 16 steps = 1 measure
+            Tone.Transport.loopEnd = `${measures}m`;
+            
+            if (wasPlaying) {
+                Tone.Transport.start();
+                isPlaying = true;
+            }
+        });
+
+        gridContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('step')) {
+                const row = parseInt(e.target.dataset.row);
+                const col = parseInt(e.target.dataset.col);
+                gridState[row][col] = !gridState[row][col];
+                e.target.classList.toggle('active');
+            } else if (e.target.dataset.instrument) {
+                // Preview instrument sound
+                const instrumentName = e.target.dataset.instrument;
+                const synth = synths[instrumentName];
+                if (synth) {
+                    try {
+                        const previewNotes = {
+                            'Kick': 'C1',
+                            'Snare': 'D1',
+                            'Hihat': 'F#1',
+                            'Open Hat': 'A#1',
+                            'Bass': 'C2',
+                            'Sub Bass': 'C1',
+                            'Lead': leadPatterns[currentLeadStyle]['C'][0],
+                            'Pad': padChords[currentPadKey][0],
+                            'FX 1': 'C4',
+                            'FX 2': 'G4'
+                        };
+                        
+                        const note = previewNotes[instrumentName] || 'C3';
+                        
+                        // Animate the icon
+                        e.target.style.transform = 'scale(1.3)';
+                        setTimeout(() => {
+                            e.target.style.transform = '';
+                        }, 200);
+                        
+                        // Play the sound
+                        if (instrumentName === 'Snare' || instrumentName === 'Hihat' || instrumentName === 'Open Hat') {
+                            synth.triggerAttackRelease('8n');
+                        } else if (instrumentName === 'Pad') {
+                            synth.triggerAttackRelease(note, '4n');
+                        } else {
+                            synth.triggerAttackRelease(note, '8n');
+                        }
+                    } catch (err) {
+                        console.warn(`Error previewing ${instrumentName}:`, err);
+                    }
+                }
+            }
+        });
+
+        // Pad tune selector
+        padTuneSelect.addEventListener('change', (e) => {
+            currentPadKey = e.target.value;
+        });
+        
+        // Lead style selector
+        leadStyleSelect.addEventListener('change', (e) => {
+            currentLeadStyle = e.target.value;
+        });
+
+        // Preset buttons
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const presetName = e.target.dataset.preset;
+                const preset = presetPatterns[presetName];
+                
+                // Clear current pattern
+                gridState = gridState.map(row => row.map(() => false));
+                document.querySelectorAll('.step.active').forEach(el => el.classList.remove('active'));
+                
+                // Apply preset
+                Object.entries(preset).forEach(([instrumentName, pattern]) => {
+                    const instrumentIndex = allInstruments.findIndex(inst => inst.name === instrumentName);
+                    if (instrumentIndex !== -1) {
+                        pattern.forEach((active, stepIndex) => {
+                            if (stepIndex < numSteps && active) {
+                                gridState[instrumentIndex][stepIndex] = true;
+                                const cell = document.querySelector(`[data-row="${instrumentIndex}"][data-col="${stepIndex}"]`);
+                                if (cell) cell.classList.add('active');
+                            }
+                        });
+                    }
+                });
+            });
+        });
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Only handle keyboard shortcuts when not in an input field
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+            
+            // Enter key - save template to next available slot
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                // Check if there's any pattern to save
+                const hasPattern = gridState.some(row => row.some(cell => cell));
+                if (hasPattern && nextTemplateNumber <= 9) {
+                    saveTemplate(nextTemplateNumber);
+                    nextTemplateNumber++;
+                }
+            }
+            
+            // Number keys 1-9 - toggle templates
+            if (e.key >= '1' && e.key <= '9') {
+                e.preventDefault();
+                const number = parseInt(e.key);
+                toggleTemplate(number);
+            }
+            
+            // Space bar - play/pause main sequencer
+            if (e.key === ' ') {
+                e.preventDefault();
+                playStopButton.click();
+            }
+        });
+        
+        // Template slot click handlers
+        templateList.addEventListener('click', (e) => {
+            const slot = e.target.closest('.template-slot');
+            if (slot) {
+                const number = parseInt(slot.id.split('-')[2]);
+                if (templates[number]) {
+                    toggleTemplate(number);
+                }
+            }
+        });
+        
+        // Mobile save button
+        if (saveTemplateBtn) {
+            saveTemplateBtn.addEventListener('click', () => {
+                const hasPattern = gridState.some(row => row.some(cell => cell));
+                if (hasPattern && nextTemplateNumber <= 9) {
+                    saveTemplate(nextTemplateNumber);
+                    nextTemplateNumber++;
+                }
+            });
+        }
+        
+        // Touch-friendly grid interactions
+        let touchStartTime = 0;
+        gridContainer.addEventListener('touchstart', (e) => {
+            touchStartTime = Date.now();
+        });
+        
+        gridContainer.addEventListener('touchend', (e) => {
+            const touchDuration = Date.now() - touchStartTime;
+            // Prevent accidental taps while scrolling
+            if (touchDuration < 300 && e.target.classList.contains('step')) {
+                e.preventDefault();
+                e.target.click();
+            }
+        });
+    </script>
+</body>
+</html>
